@@ -1,0 +1,68 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: تحميل المشروع
+        uses: actions/checkout@v4
+
+      - name: إعداد Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: العثور على ملف ZIP
+        id: zip
+        shell: bash
+        run: |
+          ZIP=$(find . -maxdepth 2 -type f -name '*.zip' | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "لم يتم العثور على ملف ZIP"
+            exit 1
+          fi
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: فك ضغط المشروع
+        run: |
+          mkdir -p extracted
+          unzip -q "${{ steps.zip.outputs.zip }}" -d extracted
+
+      - name: العثور على مشروع Android
+        id: project
+        shell: bash
+        run: |
+          ROOT=$(find extracted -type f -name 'settings.gradle.kts' -o -name 'settings.gradle' | head -n 1)
+          if [ -z "$ROOT" ]; then
+            echo "لم يتم العثور على مشروع Android"
+            exit 1
+          fi
+          ROOT=$(dirname "$ROOT")
+          echo "root=$ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: إعداد Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: بناء APK
+        working-directory: ${{ steps.project.outputs.root }}
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug
+          else
+            gradle assembleDebug
+          fi
+
+      - name: رفع APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mohammed-AI-Study-APK
+          path: '**/build/outputs/apk/debug/*.apk'
